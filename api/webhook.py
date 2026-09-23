@@ -34,6 +34,11 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"OK")
 
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Webhook is live.")
+
     def log_message(self, format, *args):
         pass  # suppress default access logs
 
@@ -41,7 +46,8 @@ class handler(BaseHTTPRequestHandler):
 async def _handle_update(body: bytes) -> None:
     data = json.loads(body)
 
-    message = data.get("message")
+    # Telegram channels use "channel_post"; groups/DMs use "message"
+    message = data.get("message") or data.get("channel_post")
     if not message or not message.get("text"):
         return
 
