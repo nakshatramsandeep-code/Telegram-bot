@@ -69,8 +69,11 @@ def load_voice_reference(voice_file_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _build_user_prompt(voice_reference: str, raw_note: str) -> str:
-    return f"VOICE REFERENCE:\n{voice_reference}\n\nMEERA'S RAW NOTE:\n{raw_note}"
+def _build_user_prompt(voice_reference: str, raw_note: str, news_context: str = "") -> str:
+    prompt = f"VOICE REFERENCE:\n{voice_reference}\n\nMEERA'S RAW NOTE:\n{raw_note}"
+    if news_context:
+        prompt += f"\n\n{news_context}"
+    return prompt
 
 
 def _call_anthropic(api_key: str, model: str, user_prompt: str) -> str:
@@ -130,11 +133,12 @@ def generate_linkedin_post(
     llm_provider: str,
     llm_api_key: str,
     llm_model: str,
+    news_context: str = "",
 ) -> str:
     logger.info("Loading voice reference from '%s'", voice_file_path)
     voice_reference = load_voice_reference(voice_file_path)
 
-    user_prompt = _build_user_prompt(voice_reference, raw_note)
+    user_prompt = _build_user_prompt(voice_reference, raw_note, news_context)
 
     logger.info("Generation started (provider=%s, model=%s)", llm_provider, llm_model)
     start = time.monotonic()

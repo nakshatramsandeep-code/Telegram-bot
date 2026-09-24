@@ -11,6 +11,7 @@ class Config:
     llm_model: str
     authorized_chat_id: Optional[int]
     voice_file_path: str
+    post_score_threshold: int
 
 
 def load_config() -> Config:
@@ -34,6 +35,7 @@ def load_config() -> Config:
     authorized_chat_id = int(authorized_chat_id_str) if authorized_chat_id_str else None
 
     voice_file_path = os.environ.get("VOICE_FILE_PATH", "voice.txt")
+    post_score_threshold = int(os.environ.get("POST_SCORE_THRESHOLD", "6"))
 
     return Config(
         telegram_token=token,
@@ -42,4 +44,5 @@ def load_config() -> Config:
         llm_model=llm_model,
         authorized_chat_id=authorized_chat_id,
         voice_file_path=voice_file_path,
+        post_score_threshold=post_score_threshold,
     )

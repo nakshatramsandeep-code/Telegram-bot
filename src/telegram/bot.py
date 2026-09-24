@@ -1,7 +1,6 @@
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-from src.ai.generator import generate_linkedin_post
 from src.config import Config
 from src.utils.logger import get_logger
 
@@ -39,6 +38,8 @@ def split_message(text: str, max_length: int = TELEGRAM_MAX_LENGTH) -> list[str]
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from src.telegram.handler import process_note
+
     config: Config = context.application.bot_data["config"]
     chat_id = update.effective_chat.id
 
@@ -50,37 +51,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     raw_note = update.message.text
-    logger.info("Telegram message received (chat_id=%s, length=%d)", chat_id, len(raw_note))
+    logger.info("Message received (chat_id=%s, length=%d)", chat_id, len(raw_note))
 
-    processing_msg = await update.message.reply_text("Writing your post...")
-
-    try:
-        post = generate_linkedin_post(
-            raw_note=raw_note,
-            voice_file_path=config.voice_file_path,
-            llm_provider=config.llm_provider,
-            llm_api_key=config.llm_api_key,
-            llm_model=config.llm_model,
-        )
-
-        parts = split_message(post)
-
-        await processing_msg.edit_text(parts[0])
-        for part in parts[1:]:
-            await context.bot.send_message(chat_id=chat_id, text=part)
-
-        logger.info("Response sent (chat_id=%s, parts=%d)", chat_id, len(parts))
-
-    except FileNotFoundError as exc:
-        logger.error("voice.txt missing: %s", exc)
-        await processing_msg.edit_text(
-            "Couldn't generate the post right now. Please try again."
-        )
-    except Exception as exc:
-        logger.error("Generation failed (chat_id=%s): %s", chat_id, exc)
-        await processing_msg.edit_text(
-            "Couldn't generate the post right now. Please try again."
-        )
+    await process_note(
+        bot=context.bot,
+        chat_id=chat_id,
+        reply_to_message_id=update.message.message_id,
+        raw_note=raw_note,
+        config=config,
+    )
 
 
 def create_bot(config: Config) -> Application:

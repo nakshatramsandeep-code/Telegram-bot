@@ -4,7 +4,6 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler
 
-# Make project root importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -13,8 +12,7 @@ load_dotenv()
 import telegram
 
 from src.config import load_config
-from src.ai.generator import generate_linkedin_post
-from src.telegram.bot import split_message
+from src.telegram.handler import process_note
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,13 +38,12 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(b"Webhook is live.")
 
     def log_message(self, format, *args):
-        pass  # suppress default access logs
+        pass
 
 
 async def _handle_update(body: bytes) -> None:
     data = json.loads(body)
 
-    # Telegram channels use "channel_post"; groups/DMs use "message"
     message = data.get("message") or data.get("channel_post")
     if not message or not message.get("text"):
         return
@@ -66,44 +63,11 @@ async def _handle_update(body: bytes) -> None:
 
     logger.info("Webhook message received (chat_id=%s, length=%d)", chat_id, len(text))
 
-    bot = telegram.Bot(config.telegram_token)
-    async with bot:
-        sent = await bot.send_message(
+    async with telegram.Bot(config.telegram_token) as bot:
+        await process_note(
+            bot=bot,
             chat_id=chat_id,
             reply_to_message_id=message_id,
-            text="Writing your post...",
+            raw_note=text,
+            config=config,
         )
-
-        try:
-            post = generate_linkedin_post(
-                raw_note=text,
-                voice_file_path=config.voice_file_path,
-                llm_provider=config.llm_provider,
-                llm_api_key=config.llm_api_key,
-                llm_model=config.llm_model,
-            )
-            parts = split_message(post)
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=sent.message_id,
-                text=parts[0],
-            )
-            for part in parts[1:]:
-                await bot.send_message(chat_id=chat_id, text=part)
-
-            logger.info("Response sent (chat_id=%s, parts=%d)", chat_id, len(parts))
-
-        except FileNotFoundError as exc:
-            logger.error("voice.txt missing: %s", exc)
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=sent.message_id,
-                text="Couldn't generate the post right now. Please try again.",
-            )
-        except Exception as exc:
-            logger.error("Generation failed (chat_id=%s): %s", chat_id, exc)
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=sent.message_id,
-                text="Couldn't generate the post right now. Please try again.",
-            )
