@@ -15,15 +15,28 @@ def _escape_html(text: str) -> str:
 
 
 def _score_bar(score: int) -> str:
-    filled = "🟥" if score <= 3 else "🟧"
+    if score <= 3:
+        filled = "🟥"
+    elif score <= 5:
+        filled = "🟧"
+    elif score <= 7:
+        filled = "🟨"
+    else:
+        filled = "🟩"
     return filled * score + "⬜" * (10 - score)
 
 
-def _rejection_text(score: int, reason: str) -> str:
+def _score_card(score: int, reason: str, accepted: bool) -> str:
     bar = _score_bar(score)
     safe_reason = _escape_html(reason)
+    if accepted:
+        return (
+            f"✅ <b>Note scored {score}/10</b>\n\n"
+            f"{bar}\n\n"
+            f"<i>{safe_reason}</i>"
+        )
     return (
-        f"🔍 <b>Note scored {score}/10</b>\n\n"
+        f"❌ <b>Note scored {score}/10</b>\n\n"
         f"{bar}\n\n"
         f"<i>{safe_reason}</i>\n\n"
         f"Try adding a specific example, number, or observation."
@@ -53,22 +66,25 @@ async def process_note(
             llm_model=config.llm_model,
         )
 
-        if score < config.post_score_threshold:
-            logger.info("Note rejected (score=%d, threshold=%d)", score, config.post_score_threshold)
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=sent_id,
-                text=_rejection_text(score, reason),
-                parse_mode="HTML",
-            )
-            return
+        accepted = score >= config.post_score_threshold
 
-        logger.info("Note accepted (score=%d) — generating post", score)
+        # Always show the score card
         await bot.edit_message_text(
             chat_id=chat_id,
             message_id=sent_id,
-            text="Writing your post...",
+            text=_score_card(score, reason, accepted),
+            parse_mode="HTML",
         )
+
+        if not accepted:
+            logger.info("Note rejected (score=%d, threshold=%d)", score, config.post_score_threshold)
+            return
+
+        logger.info("Note accepted (score=%d) — generating post", score)
+
+        # Separate message for post generation status
+        writing_msg = await bot.send_message(chat_id=chat_id, text="Writing your post...")
+        writing_id = writing_msg.message_id
 
         articles = fetch_industry_news(raw_note)
         news_context = build_news_context(articles)
@@ -85,7 +101,7 @@ async def process_note(
         parts = split_message(post)
         await bot.edit_message_text(
             chat_id=chat_id,
-            message_id=sent_id,
+            message_id=writing_id,
             text=parts[0],
         )
         for part in parts[1:]:
@@ -93,17 +109,9 @@ async def process_note(
 
         logger.info("Post sent (chat_id=%s, score=%d, parts=%d)", chat_id, score, len(parts))
 
-    except FileNotFoundError as exc:
-        logger.error("voice.txt missing: %s", exc)
-        await bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=sent_id,
-            text="Couldn't generate the post right now. Please try again.",
-        )
     except Exception as exc:
         logger.error("Processing failed (chat_id=%s): %s", chat_id, exc)
-        await bot.edit_message_text(
+        await bot.send_message(
             chat_id=chat_id,
-            message_id=sent_id,
             text="Couldn't generate the post right now. Please try again.",
         )
