@@ -15,7 +15,8 @@ def _escape_html(text: str) -> str:
 
 
 def _score_bar(score: int) -> str:
-    return "▓" * score + "░" * (10 - score)
+    filled = "🟥" if score <= 3 else "🟧"
+    return filled * score + "⬜" * (10 - score)
 
 
 def _rejection_text(score: int, reason: str) -> str:
@@ -23,7 +24,7 @@ def _rejection_text(score: int, reason: str) -> str:
     safe_reason = _escape_html(reason)
     return (
         f"🔍 <b>Note scored {score}/10</b>\n\n"
-        f"<code>{bar}</code>\n\n"
+        f"{bar}\n\n"
         f"<i>{safe_reason}</i>\n\n"
         f"Try adding a specific example, number, or observation."
     )
