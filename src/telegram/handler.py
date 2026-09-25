@@ -10,6 +10,25 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _escape_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _score_bar(score: int) -> str:
+    return "▓" * score + "░" * (10 - score)
+
+
+def _rejection_text(score: int, reason: str) -> str:
+    bar = _score_bar(score)
+    safe_reason = _escape_html(reason)
+    return (
+        f"🔍 <b>Note scored {score}/10</b>\n\n"
+        f"<code>{bar}</code>\n\n"
+        f"<i>{safe_reason}</i>\n\n"
+        f"Try adding a specific example, number, or observation."
+    )
+
+
 async def process_note(
     bot: telegram.Bot,
     chat_id: int,
@@ -38,10 +57,8 @@ async def process_note(
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=sent_id,
-                text=(
-                    f"Scored {score}/10 — {reason}\n\n"
-                    "Try adding a specific example, number, or observation to strengthen it."
-                ),
+                text=_rejection_text(score, reason),
+                parse_mode="HTML",
             )
             return
 
